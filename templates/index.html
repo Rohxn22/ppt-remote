@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Remote PPT — Dark</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --muted:#8f99a6;
+      --accent:#e6eef6;
+      --press-scale:0.985;
+    }
+    html,body{
+      height:100%;
+      margin:0;
+      font-family:Inter,system-ui,Arial;
+      background:var(--bg);
+      color:var(--accent);
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    .wrap{
+      height:100%;
+      display:flex;
+      gap:14px;
+      padding:14px;
+      box-sizing:border-box;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .side{
+      flex:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:20px;
+      height:82vh;
+      min-height:260px;
+      user-select:none;
+      transition:transform 120ms cubic-bezier(.2,.9,.3,1),box-shadow 120ms;
+      box-shadow:0 10px 30px rgba(0,0,0,0.6);
+      border:1px solid rgba(255,255,255,0.03);
+    }
+
+    .left{
+      background:linear-gradient(180deg,#0f1418,#0b1013);
+    }
+
+    .right{
+      background:linear-gradient(180deg,#071419,#052425);
+    }
+
+    .pressed{
+      transform:scale(var(--press-scale));
+      box-shadow:0 4px 12px rgba(0,0,0,0.6);
+    }
+
+    svg{
+      width:95px;
+      height:95px;
+    }
+
+    @media (max-width:600px){
+      .side{ height:86vh; border-radius:14px; }
+      svg{ width:70px; height:70px; }
+    }
+
+    .hint{
+      position:fixed;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:14px;
+      font-size:13px;
+      color:var(--muted);
+      opacity:.7;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap" role="application" aria-label="PPT remote">
+
+    <!-- LEFT BUTTON -->
+    <div id="left" class="side left" tabindex="0" aria-label="Previous slide">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#e6eef6" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </div>
+
+    <!-- RIGHT BUTTON -->
+    <div id="right" class="side right" tabindex="0" aria-label="Next slide">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#e6eef6" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 6 15 12 9 18"></polyline>
+      </svg>
+    </div>
+
+  </div>
+
+  <div class="hint">Tap or long-press • vibration enabled</div>
+
+<script>
+const TOKEN = "{{ token }}"; // invisible, server handles it
+
+async function sendPress(side){
+  try{
+    await fetch('/press/' + side + '?token=' + TOKEN, {
+      method:'POST'
+    });
+  }catch(e){
+    console.log("network fallback", e);
+  }
+}
+
+function tactile(el){
+  el.classList.add("pressed");
+  if(navigator.vibrate){ try{ navigator.vibrate(22); }catch(e){} }
+  setTimeout(()=>el.classList.remove("pressed"), 140);
+}
+
+function makeHoldable(el, side){
+  let timer = null;
+  let repeating = false;
+  const startDelay = 420;
+  const repeatMS = 160;
+
+  const start = (ev)=>{
+    ev.preventDefault();
+    tactile(el);
+    sendPress(side);
+
+    timer = setTimeout(()=>{
+      repeating = true;
+      timer = setInterval(()=>{
+        tactile(el);
+        sendPress(side);
+      }, repeatMS);
+    }, startDelay);
+  };
+
+  const end = ()=>{
+    if(!timer) return;
+    if(repeating) clearInterval(timer);
+    else clearTimeout(timer);
+    timer = null;
+    repeating = false;
+  };
+
+  el.addEventListener("touchstart", start, {passive:false});
+  el.addEventListener("touchend", end);
+  el.addEventListener("touchcancel", end);
+
+  el.addEventListener("mousedown", start);
+  window.addEventListener("mouseup", end);
+
+  el.addEventListener("keydown", (e)=>{
+    if(e.key === " " || e.key === "Enter"){
+      e.preventDefault();
+      tactile(el);
+      sendPress(side);
+    }
+  });
+}
+
+makeHoldable(document.getElementById("left"), "left");
+makeHoldable(document.getElementById("right"), "right");
+</script>
+</body>
+</html>
